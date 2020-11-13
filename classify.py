@@ -13,9 +13,50 @@ import argparse
 import tensorflow as tf
 import tensorflow.keras as keras
 
+class CTCLayer(keras.layers.Layer):
+    def __init__(self, name=None, **kwargs):
+        super(CTCLayer, self).__init__(name=name, **kwargs)
+        self.loss_fn = keras.backend.ctc_batch_cost
+
+    def call(self, y_true, y_pred):
+
+        # Compute the training-time loss value and add it
+        # to the layer using `self.add_loss()`.
+        batch_len = tf.cast(tf.shape(y_true)[0], dtype="int64")
+        input_length = tf.cast(tf.shape(y_pred)[1], dtype="int64")
+        label_length = tf.cast(tf.shape(y_true)[1], dtype="int64")
+
+        input_length = input_length * tf.ones(shape=(batch_len, 1), dtype="int64")
+        label_length = label_length * tf.ones(shape=(batch_len, 1), dtype="int64")
+
+        loss = self.loss_fn(y_true, y_pred, input_length, label_length)
+        self.add_loss(loss)
+
+        # At test time, just return the computed predictions
+        return y_pred
+
+    def get_config(self):
+        config = super(CTCLayer, self).get_config()
+        return config
+
 def decode(characters, y):
     y = numpy.argmax(numpy.array(y), axis=2)[:,0]
     return ''.join([characters[x] for x in y])
+
+# A utility function to decode the output of the network
+def decode_batch_predictions(characters, pred):
+    input_len = numpy.ones(pred.shape[0]) * pred.shape[1]
+    # Use greedy search. For complex tasks, you can use beam search
+    results = keras.backend.ctc_decode(pred, input_length=input_len, greedy=True)[0][0][:, :50]
+    # Iterate over the results and get back the text
+    output_text = []
+    for res in results:
+        print(res)
+        print([c for c in res])
+        print([characters[c] for c in res])
+        res = "".join([characters[c] for c in res])
+        output_text.append(res)
+    return "".join(output_text)
 
 def main():
     parser = argparse.ArgumentParser()
@@ -43,30 +84,36 @@ def main():
 
     symbols_file = open(args.symbols, 'r')
     captcha_symbols = symbols_file.readline().strip()
+    captcha_symbols = [ch for ch in captcha_symbols]
+    captcha_symbols.append('')
     symbols_file.close()
-
-    print("Classifying captchas with symbol set {" + captcha_symbols + "}")
 
     with tf.device('/cpu:0'):
         with open(args.output, 'w', newline='\n') as output_file:
-            json_file = open(args.model_name+'.json', 'r')
-            loaded_model_json = json_file.read()
-            json_file.close()
-            model = keras.models.model_from_json(loaded_model_json)
+            model = tf.keras.models.load_model('model.h5', custom_objects={'CTCLayer': CTCLayer})
             model.load_weights(args.model_name+'.h5')
-            model.compile(loss='categorical_crossentropy',
-                          optimizer=keras.optimizers.Adam(1e-3, amsgrad=True),
-                          metrics=['accuracy'])
+
+            prediction_model = keras.models.Model(
+                model.get_layer(name="images").input, model.get_layer(name="softmax").output
+            )
+            prediction_model.summary()
 
             for x in os.listdir(args.captcha_dir):
-                # load image and preprocess it
-                raw_data = cv2.imread(os.path.join(args.captcha_dir, x))
-                rgb_data = cv2.cvtColor(raw_data, cv2.COLOR_BGR2RGB)
-                image = numpy.array(rgb_data) / 255.0
-                (c, h, w) = image.shape
-                image = image.reshape([-1, c, h, w])
-                prediction = model.predict(image)
-                output_file.write(x + "," + decode(captcha_symbols, prediction) + "\n")
+                # 1. Read image
+                img = tf.io.read_file(os.path.join(args.captcha_dir, x))
+                # 2. Decode and convert to grayscale
+                img = tf.io.decode_png(img, channels=1)
+                # 3. Convert to float32 in [0, 1] range
+                img = tf.image.convert_image_dtype(img, tf.float32)
+                # 4. Resize to the desired size
+                img = tf.image.resize(img, [64, 128])
+                # 5. Transpose the image because we want the time
+                # dimension to correspond to the width of the image.
+                img = tf.transpose(img, perm=[1, 0, 2])
+                img = tf.reshape(img, (-1, 128, 64, 1))                
+
+                prediction = prediction_model.predict(img)
+                output_file.write(x + "," + decode_batch_predictions(captcha_symbols, prediction) + "\n")
 
                 print('Classified ' + x)
 

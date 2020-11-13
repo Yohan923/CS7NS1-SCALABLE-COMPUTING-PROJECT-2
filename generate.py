@@ -8,6 +8,9 @@ import cv2
 import argparse
 import captcha.image
 
+from consts import symbol_map
+from utils import to_valid_char
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--width', help='Width of captcha image', type=int)
@@ -55,13 +58,17 @@ def main():
         os.makedirs(args.output_dir)
 
     for i in range(args.count):
-        random_str = ''.join([random.choice(captcha_symbols) for j in range(args.length)])
-        image_path = os.path.join(args.output_dir, random_str+'.png')
+        chars = [random.choice(captcha_symbols) for j in range(args.length)]
+
+        random_str = ''.join(chars)
+        path_str = '_'.join([to_valid_char(c) for c in chars])
+
+        image_path = os.path.join(args.output_dir, path_str+'.png')
         if os.path.exists(image_path):
             version = 1
-            while os.path.exists(os.path.join(args.output_dir, random_str + '_' + str(version) + '.png')):
+            while os.path.exists(os.path.join(args.output_dir,path_str + '_' + str(version) + '.png')):
                 version += 1
-            image_path = os.path.join(args.output_dir, random_str + '_' + str(version) + '.png')
+            image_path = os.path.join(args.output_dir,path_str + '_' + str(version) + '.png')
 
         image = numpy.array(captcha_generator.generate_image(random_str))
         cv2.imwrite(image_path, image)
