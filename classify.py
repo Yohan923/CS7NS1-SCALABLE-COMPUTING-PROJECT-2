@@ -12,6 +12,7 @@ import random
 import argparse
 import tensorflow as tf
 import tensorflow.keras as keras
+#import tflite_runtime.interpreter as tflite
 import scipy.ndimage
 
 class CTCLayer(keras.layers.Layer):
@@ -62,6 +63,8 @@ def main():
     parser.add_argument('--captcha-dir', help='Where to read the captchas to break', type=str)
     parser.add_argument('--output', help='File where the classifications should be saved', type=str)
     parser.add_argument('--symbols', help='File with the symbols to use in captchas', type=str)
+    parser.add_argument('--tflite', help='if we are clasifying using tflite', type=str)
+
     args = parser.parse_args()
 
     if args.model_name is None:
@@ -86,8 +89,19 @@ def main():
     captcha_symbols.append('')
     symbols_file.close()
 
-    with tf.device('/cpu:0'):
-        with open(args.output, 'w', newline='\n') as output_file:
+    # with tf.device('/cpu:0'):
+    with open(args.output, 'w', newline='\n') as output_file:
+
+        if args.tflite:
+            interpreter = tf.lite.Interpreter(model_path=args.model_name+'.tflite')
+            interpreter.allocate_tensors()
+
+            input_details = interpreter.get_input_details()
+            output_details = interpreter.get_output_details()
+
+            input_shape = input_details[1]['shape']
+
+        else:
             model = tf.keras.models.load_model('model.h5', custom_objects={'CTCLayer': CTCLayer})
             model.load_weights(args.model_name+'.h5')
 
@@ -96,53 +110,60 @@ def main():
             )
             prediction_model.summary()
 
-            for x in os.listdir(args.captcha_dir):
-                
-                raw_image = cv2.imread(os.path.join(args.captcha_dir, x))
-                # to grayscale
-                gray = cv2.cvtColor(raw_image, cv2.COLOR_BGR2GRAY)
-                # thresholding
-                ret, thresh = cv2.threshold(gray, 230, 255, cv2.THRESH_BINARY)
-                thresh = ~thresh
+        for x in os.listdir(args.captcha_dir):
+            
+            #raw_image = cv2.imread(os.path.join(args.captcha_dir, x))
+            ## to grayscale
+            #gray = cv2.cvtColor(raw_image, cv2.COLOR_BGR2GRAY)
+            ## thresholding
+            #ret, thresh = cv2.threshold(gray, 230, 255, cv2.THRESH_BINARY)
+            #thresh = ~thresh
+#
+            ## erosion to reduce noise
+            #kernel = numpy.ones((2, 2),numpy.uint8)
+            #erosion = cv2.erode(thresh,kernel,iterations = 1)
+            #erosion = ~erosion # black letters, white background
+#
+            #img = scipy.ndimage.median_filter(erosion, (5, 1)) # remove line noise
+            #img = scipy.ndimage.median_filter(img, (1, 3)) # weaken circle noise
+#
+            ## img = cv2.erode(img, kernel, iterations = 1) # dilate image to initial stage (erode works similar to dilate because we thresholded the image the opposite way)
+            #
+            #img = scipy.ndimage.median_filter(img, (3, 3)) # remove any final 'weak' noise that might be present (line or circle)
+            #
+            #res = cv2.resize(img,(64, 128), interpolation = cv2.INTER_LINEAR)
+#
+            #img = numpy.array(img) / 255.0
+            #img = numpy.reshape(img, (64, 128, 1))
+#
+            #img = numpy.transpose(img, (1, 0, 2))
+            #img = numpy.reshape(img, (-1, 128, 64, 1))
 
-                # erosion to reduce noise
-                kernel = numpy.ones((2, 2),numpy.uint8)
-                erosion = cv2.erode(thresh,kernel,iterations = 1)
-                erosion = ~erosion # black letters, white background
 
-                img = scipy.ndimage.median_filter(erosion, (5, 1)) # remove line noise
-                img = scipy.ndimage.median_filter(img, (1, 3)) # weaken circle noise
+            # 1. Read image
+            img = tf.io.read_file(os.path.join(args.captcha_dir, x))
+            # 2. Decode and convert to grayscale
+            img = tf.io.decode_png(img, channels=1)
+            # 3. Convert to float32 in [0, 1] range
+            img = tf.image.convert_image_dtype(img, tf.float32)
+            # 4. Resize to the desired size
+            img = tf.image.resize(img, [64, 128])
+            # 5. Transpose the image because we want the time
+            # dimension to correspond to the width of the image.
+            img = tf.transpose(img, perm=[1, 0, 2])
+            img = tf.reshape(img, (-1, 128, 64, 1))    
 
-                # img = cv2.erode(img, kernel, iterations = 1) # dilate image to initial stage (erode works similar to dilate because we thresholded the image the opposite way)
-                
-                img = scipy.ndimage.median_filter(img, (3, 3)) # remove any final 'weak' noise that might be present (line or circle)
-                
-                res = cv2.resize(img,(64, 128), interpolation = cv2.INTER_LINEAR)
+            interpreter.set_tensor(input_details[1]['index'], img)
 
-                img = numpy.array(img) / 255.0
-                img = numpy.reshape(img, (64, 128, 1))
+            interpreter.invoke()            
 
-                img = numpy.transpose(img, (1, 0, 2))
-                img = numpy.reshape(img, (-1, 128, 64, 1))
+            prediction = interpreter.get_tensor(output_details[0]['index'])
+            print(prediction)
 
+            #prediction = prediction_model.predict(img)
+            output_file.write(x + "," + decode_batch_predictions(captcha_symbols, prediction) + "\n")
 
-                ## 1. Read image
-                #img = tf.io.read_file(os.path.join(args.captcha_dir, x))
-                ## 2. Decode and convert to grayscale
-                #img = tf.io.decode_png(img, channels=1)
-                ## 3. Convert to float32 in [0, 1] range
-                #img = tf.image.convert_image_dtype(img, tf.float32)
-                ## 4. Resize to the desired size
-                #img = tf.image.resize(img, [64, 128])
-                ## 5. Transpose the image because we want the time
-                ## dimension to correspond to the width of the image.
-                #img = tf.transpose(img, perm=[1, 0, 2])
-                #img = tf.reshape(img, (-1, 128, 64, 1))                
-
-                prediction = prediction_model.predict(img)
-                output_file.write(x + "," + decode_batch_predictions(captcha_symbols, prediction) + "\n")
-
-                print('Classified ' + x)
+            print('Classified ' + x)
 
 if __name__ == '__main__':
     main()
