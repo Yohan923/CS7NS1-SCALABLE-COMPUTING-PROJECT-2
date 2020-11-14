@@ -14,6 +14,9 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 from utils import find_actual_char
 
+from matplotlib import pyplot as plt
+import scipy.ndimage
+
 class CTCLayer(keras.layers.Layer):
     def __init__(self, name=None, **kwargs):
         super(CTCLayer, self).__init__(name=name, **kwargs)
@@ -83,7 +86,7 @@ def create_model(captcha_num_symbols, input_shape, model_depth=2, module_size=2)
     x = keras.layers.Bidirectional(keras.layers.LSTM(64, return_sequences=True, dropout=0.25))(x)
 
     # Output layer
-    x = keras.layers.Dense(captcha_num_symbols + 1, activation="softmax", name="softmax")(x)
+    x = keras.layers.Dense(captcha_num_symbols, activation="softmax", name="softmax")(x)
 
     output = CTCLayer(name="ctc_loss")(labels, x)
 
@@ -127,17 +130,49 @@ class ImageSequence(keras.utils.Sequence):
             # We've used this image now, so we can't repeat it in this iteration
             self.used_files.append(self.files.pop(random_image_label))
 
-            # 1. Read image
-            img = tf.io.read_file(os.path.join(self.directory_name, random_image_file))
-            # 2. Decode and convert to grayscale
-            img = tf.io.decode_png(img, channels=1)
-            # 3. Convert to float32 in [0, 1] range
-            img = tf.image.convert_image_dtype(img, tf.float32)
-            # 4. Resize to the desired size
-            img = tf.image.resize(img, [self.captcha_height, self.captcha_width])
-            # 5. Transpose the image because we want the time
-            # dimension to correspond to the width of the image.
-            img = tf.transpose(img, perm=[1, 0, 2])
+            raw_image = cv2.imread(os.path.join(self.directory_name, random_image_file))
+            # to grayscale
+            gray = cv2.cvtColor(raw_image, cv2.COLOR_BGR2GRAY)
+            # thresholding
+            ret, thresh = cv2.threshold(gray, 230, 255, cv2.THRESH_BINARY)
+            thresh = ~thresh
+
+            # erosion to reduce noise
+            kernel = numpy.ones((2, 2),numpy.uint8)
+            erosion = cv2.erode(thresh,kernel,iterations = 1)
+            erosion = ~erosion # black letters, white background
+
+            img = scipy.ndimage.median_filter(erosion, (5, 1)) # remove line noise
+            img = scipy.ndimage.median_filter(img, (1, 3)) # weaken circle noise
+
+            # img = cv2.erode(img, kernel, iterations = 1) # dilate image to initial stage (erode works similar to dilate because we thresholded the image the opposite way)
+            
+            img = scipy.ndimage.median_filter(img, (3, 3)) # remove any final 'weak' noise that might be present (line or circle)
+            
+            res = cv2.resize(img,(self.captcha_height, self.captcha_width), interpolation = cv2.INTER_LINEAR)
+
+            img = numpy.array(img) / 255.0
+            img = numpy.reshape(img, (self.captcha_height, self.captcha_width, 1))
+
+            img = numpy.transpose(img, (1, 0, 2))
+
+            # plt.imshow(img,'gray')
+            # plt.title('ok')
+            # plt.xticks([]),plt.yticks([])
+
+            # plt.show()
+
+            ## 1. Read image
+            #img = tf.io.read_file(os.path.join(self.directory_name, random_image_file))
+            ## 2. Decode and convert to grayscale
+            #img = tf.io.decode_png(img, channels=1)
+            ## 3. Convert to float32 in [0, 1] range
+            #img = tf.image.convert_image_dtype(img, tf.float32)
+            ## 4. Resize to the desired size
+            #img = tf.image.resize(img, [self.captcha_height, self.captcha_width])
+            ## 5. Transpose the image because we want the time
+            ## dimension to correspond to the width of the image.
+            #img = tf.transpose(img, perm=[1, 0, 2])
             X[i] = img
 
             # We have a little hack here - we save captchas as TEXT_num.png if there is more than one captcha with the text "TEXT"

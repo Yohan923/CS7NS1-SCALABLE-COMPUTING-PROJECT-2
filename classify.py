@@ -12,6 +12,7 @@ import random
 import argparse
 import tensorflow as tf
 import tensorflow.keras as keras
+import scipy.ndimage
 
 class CTCLayer(keras.layers.Layer):
     def __init__(self, name=None, **kwargs):
@@ -51,9 +52,6 @@ def decode_batch_predictions(characters, pred):
     # Iterate over the results and get back the text
     output_text = []
     for res in results:
-        print(res)
-        print([c for c in res])
-        print([characters[c] for c in res])
         res = "".join([characters[c] for c in res])
         output_text.append(res)
     return "".join(output_text)
@@ -99,18 +97,47 @@ def main():
             prediction_model.summary()
 
             for x in os.listdir(args.captcha_dir):
-                # 1. Read image
-                img = tf.io.read_file(os.path.join(args.captcha_dir, x))
-                # 2. Decode and convert to grayscale
-                img = tf.io.decode_png(img, channels=1)
-                # 3. Convert to float32 in [0, 1] range
-                img = tf.image.convert_image_dtype(img, tf.float32)
-                # 4. Resize to the desired size
-                img = tf.image.resize(img, [64, 128])
-                # 5. Transpose the image because we want the time
-                # dimension to correspond to the width of the image.
-                img = tf.transpose(img, perm=[1, 0, 2])
-                img = tf.reshape(img, (-1, 128, 64, 1))                
+                
+                raw_image = cv2.imread(os.path.join(args.captcha_dir, x))
+                # to grayscale
+                gray = cv2.cvtColor(raw_image, cv2.COLOR_BGR2GRAY)
+                # thresholding
+                ret, thresh = cv2.threshold(gray, 230, 255, cv2.THRESH_BINARY)
+                thresh = ~thresh
+
+                # erosion to reduce noise
+                kernel = numpy.ones((2, 2),numpy.uint8)
+                erosion = cv2.erode(thresh,kernel,iterations = 1)
+                erosion = ~erosion # black letters, white background
+
+                img = scipy.ndimage.median_filter(erosion, (5, 1)) # remove line noise
+                img = scipy.ndimage.median_filter(img, (1, 3)) # weaken circle noise
+
+                # img = cv2.erode(img, kernel, iterations = 1) # dilate image to initial stage (erode works similar to dilate because we thresholded the image the opposite way)
+                
+                img = scipy.ndimage.median_filter(img, (3, 3)) # remove any final 'weak' noise that might be present (line or circle)
+                
+                res = cv2.resize(img,(64, 128), interpolation = cv2.INTER_LINEAR)
+
+                img = numpy.array(img) / 255.0
+                img = numpy.reshape(img, (64, 128, 1))
+
+                img = numpy.transpose(img, (1, 0, 2))
+                img = numpy.reshape(img, (-1, 128, 64, 1))
+
+
+                ## 1. Read image
+                #img = tf.io.read_file(os.path.join(args.captcha_dir, x))
+                ## 2. Decode and convert to grayscale
+                #img = tf.io.decode_png(img, channels=1)
+                ## 3. Convert to float32 in [0, 1] range
+                #img = tf.image.convert_image_dtype(img, tf.float32)
+                ## 4. Resize to the desired size
+                #img = tf.image.resize(img, [64, 128])
+                ## 5. Transpose the image because we want the time
+                ## dimension to correspond to the width of the image.
+                #img = tf.transpose(img, perm=[1, 0, 2])
+                #img = tf.reshape(img, (-1, 128, 64, 1))                
 
                 prediction = prediction_model.predict(img)
                 output_file.write(x + "," + decode_batch_predictions(captcha_symbols, prediction) + "\n")
