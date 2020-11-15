@@ -78,42 +78,58 @@ def main():
     captcha_symbols.append('')
     symbols_file.close()
 
-    with open(args.output, 'w', newline='\n') as output_file:
-        # interpreter = tf.lite.Interpreter(model_path=args.model_name+'.tflite')
+    file_open_mode = 'w'
+    classified_files = []
+    if os.path.exists("unfinished.txt"):
+        file_open_mode = 'a'
+        try:
+            with open(args.output, 'r') as f:
+                for l in f:
+                    classified_files.append(l.split(',')[0])
+        except Exception:
+            file_open_mode = 'w'
 
-        interpreter = tflite.Interpreter(model_path=args.model_name+'.tflite')
-        interpreter.allocate_tensors()
 
-        input_details = interpreter.get_input_details()
-        output_details = interpreter.get_output_details()
+    with open('unfinished.txt', 'w') as unfinished_file:
+        with open(args.output, file_open_mode, newline='\n') as output_file:
+            # interpreter = tf.lite.Interpreter(model_path=args.model_name+'.tflite')
 
-        input_shape = input_details[1]['shape']
+            interpreter = tflite.Interpreter(model_path=args.model_name+'.tflite')
+            interpreter.allocate_tensors()
 
-        for x in os.listdir(args.captcha_dir):
-            
-            img = cv2.imread(os.path.join(args.captcha_dir, x), cv2.IMREAD_GRAYSCALE)
-            # to grayscale
-            img = numpy.reshape(img, (img.shape[0], img.shape[1], 1))
-            # Convert to float32 in [0, 1] range
-            img = numpy.array(img, dtype=numpy.float32) / 255.0
-            # Resize to the desired size
-            img = cv2.resize(img,(128, 64), interpolation = cv2.INTER_LINEAR)
-            img = numpy.reshape(img, (img.shape[0], img.shape[1], 1))
+            input_details = interpreter.get_input_details()
+            output_details = interpreter.get_output_details()
 
-            # Transpose the image because we want the time
-            # dimension to correspond to the width of the image.
-            img = numpy.transpose(img, (1, 0, 2))
+            input_shape = input_details[1]['shape']
 
-            img = numpy.reshape(img, input_shape)
-   
-            interpreter.set_tensor(input_details[1]['index'], img)
-            interpreter.invoke()            
+            captchas_files = os.listdir(args.captcha_dir)
+            for x in range(len(classified_files), len(captchas_files)):
 
-            prediction = interpreter.get_tensor(output_details[0]['index'])
+                img = cv2.imread(os.path.join(args.captcha_dir, captchas_files[x]), cv2.IMREAD_GRAYSCALE)
+                # to grayscale
+                img = numpy.reshape(img, (img.shape[0], img.shape[1], 1))
+                # Convert to float32 in [0, 1] range
+                img = numpy.array(img, dtype=numpy.float32) / 255.0
+                # Resize to the desired size
+                img = cv2.resize(img,(128, 64), interpolation = cv2.INTER_LINEAR)
+                img = numpy.reshape(img, (img.shape[0], img.shape[1], 1))
 
-            output_file.write(x + "," + decode_batch_predictions(captcha_symbols, prediction) + "\n")
+                # Transpose the image because we want the time
+                # dimension to correspond to the width of the image.
+                img = numpy.transpose(img, (1, 0, 2))
 
-            print('Classified ' + x)
+                img = numpy.reshape(img, input_shape)
+    
+                interpreter.set_tensor(input_details[1]['index'], img)
+                interpreter.invoke()            
 
+                prediction = interpreter.get_tensor(output_details[0]['index'])
+
+                output_file.write(captchas_files[x] + "," + decode_batch_predictions(captcha_symbols, prediction) + "\n")
+                
+                print('Classified ' + captchas_files[x])
+    
+    os.remove('unfinished.txt')
+    
 if __name__ == '__main__':
     main()

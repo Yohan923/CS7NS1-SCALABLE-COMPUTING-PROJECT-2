@@ -8,5 +8,6 @@ symbol_map = {
     '|': 'stick',
     ':': 'colon',
     '"': 'dquote',
-    ' ': 'space'
+    ' ': 'space',
+    '_': 'und'
 }

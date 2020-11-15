@@ -11,7 +11,7 @@ def to_valid_char(character):
     return symbol_map.get(character) if symbol_map.get(character) else character
 
 
-def find_actual_char(character):
+def decode_label_char(character):
     if character.isnumeric():
         return ''
     

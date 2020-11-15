@@ -11,9 +11,9 @@ import os
 import warnings
 warnings.filterwarnings("ignore", category=FutureWarning)
 warnings.filterwarnings("ignore", category=DeprecationWarning)
-tf.__version__
+print(tf.__version__)
 
-from utils import find_actual_char, ConvertToTfLite
+from utils import decode_label_char, ConvertToTfLite
 
 from matplotlib import pyplot as plt
 import scipy.ndimage
@@ -121,7 +121,7 @@ class ImageSequence(keras.utils.Sequence):
 
     def __getitem__(self, idx):
         X = numpy.zeros((self.batch_size, self.captcha_width, self.captcha_height, 1), dtype=numpy.float32)
-        labels = numpy.full([self.batch_size, 8], len(self.captcha_symbols) - 1)
+        labels = numpy.full([self.batch_size, 16], len(self.captcha_symbols) - 1) # 16 being max number of char in a label, we fill matrix with "" char
 
         for i in range(self.batch_size):
 
@@ -137,24 +137,24 @@ class ImageSequence(keras.utils.Sequence):
             ## thresholding
             #ret, thresh = cv2.threshold(gray, 230, 255, cv2.THRESH_BINARY)
             #thresh = ~thresh
-#
+
             ## erosion to reduce noise
             #kernel = numpy.ones((2, 2),numpy.uint8)
             #erosion = cv2.erode(thresh,kernel,iterations = 1)
             #erosion = ~erosion # black letters, white background
-#
+
             #img = scipy.ndimage.median_filter(erosion, (5, 1)) # remove line noise
             #img = scipy.ndimage.median_filter(img, (1, 3)) # weaken circle noise
-#
+
             ## img = cv2.erode(img, kernel, iterations = 1) # dilate image to initial stage (erode works similar to dilate because we thresholded the image the opposite way)
             #
             #img = scipy.ndimage.median_filter(img, (3, 3)) # remove any final 'weak' noise that might be present (line or circle)
             #
             #res = cv2.resize(img,(self.captcha_height, self.captcha_width), interpolation = cv2.INTER_LINEAR)
-#
+
             #img = numpy.array(img) / 255.0
             #img = numpy.reshape(img, (self.captcha_height, self.captcha_width, 1))
-#
+
             #img = numpy.transpose(img, (1, 0, 2))
 
             # plt.imshow(img,'gray')
@@ -163,29 +163,31 @@ class ImageSequence(keras.utils.Sequence):
 
             # plt.show()
 
-            # 1. Read image
-            img = tf.io.read_file(os.path.join(self.directory_name, random_image_file))
-            # 2. Decode and convert to grayscale
-            img = tf.io.decode_png(img, channels=1)
-            # 3. Convert to float32 in [0, 1] range
-            img = tf.image.convert_image_dtype(img, tf.float32)
-            # 4. Resize to the desired size
-            img = tf.image.resize(img, [self.captcha_height, self.captcha_width])
-            # 5. Transpose the image because we want the time
+
+            img = cv2.imread(os.path.join(self.directory_name, random_image_file), cv2.IMREAD_GRAYSCALE)
+            # to grayscale
+            img = numpy.reshape(img, (img.shape[0], img.shape[1], 1))
+            # Convert to float32 in [0, 1] range
+            img = numpy.array(img, dtype=numpy.float32) / 255.0
+            # Resize to the desired size
+            img = cv2.resize(img,(128, 64), interpolation = cv2.INTER_LINEAR)
+            img = numpy.reshape(img, (img.shape[0], img.shape[1], 1))
+            # Transpose the image because we want the time
             # dimension to correspond to the width of the image.
-            img = tf.transpose(img, perm=[1, 0, 2])
+            img = numpy.transpose(img, (1, 0, 2))
+
             X[i] = img
 
             # We have a little hack here - we save captchas as TEXT_num.png if there is more than one captcha with the text "TEXT"
             # So the real label should have the "_num" stripped out.
-
+            # each character is separated by "_", illegal characters are mapped by symbol_map and decoded before using
             random_image_label = random_image_label.split('_')
             pos = 0
             for ch in random_image_label:
-                actual_char = find_actual_char(ch)
+                decoded_char = decode_label_char(ch)
 
-                if actual_char:
-                    labels[i][pos] = self.captcha_symbols.index(actual_char)
+                if decoded_char: # decoded char may be "" - this corresponds to the version number i.e. "label_2.png"
+                    labels[i][pos] = self.captcha_symbols.index(decoded_char)
                     pos += 1
 
         return {"images": X, "labels": labels}
@@ -249,12 +251,12 @@ def main():
     captcha_symbols = [ch for ch in captcha_symbols]
     captcha_symbols.append('')
 
-    #physical_devices = tf.config.experimental.list_physical_devices('GPU')
-    #assert len(physical_devices) > 0, "No GPU available!"
-    #tf.config.experimental.set_memory_growth(physical_devices[0], True)
+    physical_devices = tf.config.experimental.list_physical_devices('GPU')
+    assert len(physical_devices) > 0, "No GPU available!"
+    tf.config.experimental.set_memory_growth(physical_devices[0], True)
 
-    #with tf.device('/device:GPU:0'):
-    with tf.device('/device:CPU:0'):
+    with tf.device('/device:GPU:0'):
+    #with tf.device('/device:CPU:0'):
         # with tf.device('/device:XLA_CPU:0'):
 
         if args.input_model is not None:
