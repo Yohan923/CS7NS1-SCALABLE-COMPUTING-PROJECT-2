@@ -102,7 +102,7 @@ def main():
 
             input_shape = input_details[1]['shape']
 
-            captchas_files = os.listdir(args.captcha_dir)
+            captchas_files = sorted(os.listdir(args.captcha_dir))
             for x in range(len(classified_files), len(captchas_files)):
 
                 img = cv2.imread(os.path.join(args.captcha_dir, captchas_files[x]), cv2.IMREAD_GRAYSCALE)
