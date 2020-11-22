@@ -23,6 +23,7 @@ venv.bak/
 .history/
 
 # custom
+stuff.txt
 my-stuff.py
 example_captchas/
 old_models/
