@@ -54,7 +54,7 @@ GEN_VALID_COMMANDS = [
 ]
 
 TRAIN_COMMAND = [
-    'python -u train.py --width 128 --height 64 --symbols symbols.txt --batch-size 32 --epochs 2 --output-model model --train-dataset training-dataset --validate-dataset validation-dataset --input-model model'
+    'python train.py --width 128 --height 64 --symbols symbols.txt --batch-size 32 --epochs 100 --output-model model --train-dataset training-dataset --validate-dataset validation-dataset --input-model model'
 ]
 
 def run_commands(commands):

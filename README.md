@@ -58,19 +58,9 @@ The script will execute the the following steps
 By default, the script will classify images stored in the directory ```./captchas/``` and store the results in ```stuff.txt```. You can change this by modifying the script at line 12. 
 
 
-<h1>Bundle Structure</h1>
+<h2>Misc</h2>
 
-The code bundle includes 3 main components:
+---
 
-- [train.py](./train.py)
-    - input arguments: 
-        - width - width of the image
-        - height - height of the image
-        - batch-size - size of the batch
-        - train-dataset - name of the directory containing training images in the project root directory
-        - validate-dataset - name of the directory containing validation images in the project root directory
-        - input-model(optional)- name of the model to continue training with in the root directory
-        - epochs - number of epochs to train for
-        - symbols - full name of the txt file containing the symbol set
-- [generate.py](./generate.py)
-- [classify.py](./classify.py)
+[send.sh](./send.sh)
+not important, just used for my own convenience to ```scp``` result text file to my own PC
