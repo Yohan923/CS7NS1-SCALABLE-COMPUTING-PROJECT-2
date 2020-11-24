@@ -28,7 +28,7 @@ class ConvertToTfLite(keras.callbacks.Callback):
         self.model_dir = model_dir
         self.model_name = model_name
 
-    def on_epoch_end(self, epoch, logs=None):
+    def on_train_end(self, epoch, logs=None):
         # Convert the model
         converter = tf.lite.TFLiteConverter.from_keras_model(self.model)
         converter.experimental_new_converter = True

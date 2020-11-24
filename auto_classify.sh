@@ -1,5 +1,5 @@
 if [ ! -d "venv/" ]; then
-	python3 -m venv --system-site-packages ./venv
+	python3 -m venv ./venv
 fi
 source venv/bin/activate
 if [ -d "/users/ugrad/zhangti/project2/OpenBLAS/lib/" ]; then

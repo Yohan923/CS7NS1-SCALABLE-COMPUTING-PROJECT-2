@@ -11,12 +11,11 @@ import os
 import warnings
 warnings.filterwarnings("ignore", category=FutureWarning)
 warnings.filterwarnings("ignore", category=DeprecationWarning)
-print(tf.__version__)
 
 from utils import decode_label_char, ConvertToTfLite
 
-from matplotlib import pyplot as plt
-import scipy.ndimage
+# from matplotlib import pyplot as plt
+# import scipy.ndimage
 
 class CTCLayer(keras.layers.Layer):
     def __init__(self, name=None, **kwargs):
@@ -251,15 +250,16 @@ def main():
     captcha_symbols = [ch for ch in captcha_symbols]
     captcha_symbols.append('')
 
+    device = '/device:CPU:0'
     physical_devices = tf.config.experimental.list_physical_devices('GPU')
-    assert len(physical_devices) > 0, "No GPU available!"
-    tf.config.experimental.set_memory_growth(physical_devices[0], True)
+    if len(physical_devices) > 0: # "GPU available!"
+        tf.config.experimental.set_memory_growth(physical_devices[0], True)
+        device = '/device:GPU:0'
 
-    with tf.device('/device:GPU:0'):
-    #with tf.device('/device:CPU:0'):
+    with tf.device(device):
         # with tf.device('/device:XLA_CPU:0'):
-
-        if args.input_model is not None:
+        print(f'training with {device}')
+        if args.input_model is not None and os.path.exists(args.input_model + '.h5'):
             model = tf.keras.models.load_model(args.input_model + '.h5', custom_objects={'CTCLayer': CTCLayer})
             model.load_weights(args.input_model + '.h5')
         else:
