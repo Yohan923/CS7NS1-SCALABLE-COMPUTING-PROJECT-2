@@ -18,7 +18,7 @@ import tflite_runtime.interpreter as tflite
 def greedy_ctc_decode(pred):
     tmp = numpy.array(pred)
     result = []
-    prev = 51 # can be arbitrary
+    prev = 51
     for step in pred[0]:
         idx = numpy.argmax(step)
         if idx != prev:
