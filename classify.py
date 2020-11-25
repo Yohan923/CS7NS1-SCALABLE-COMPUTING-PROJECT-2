@@ -11,6 +11,7 @@ import string
 import random
 import argparse
 import tflite_runtime.interpreter as tflite
+import time
 
 # import tensorflow.keras as keras
 # import tensorflow as tf
@@ -89,7 +90,7 @@ def main():
         except Exception:
             file_open_mode = 'w'
 
-
+    start_classify = time.time()
     with open('unfinished.txt', 'w') as unfinished_file:
         with open(args.output, file_open_mode, newline='\n') as output_file:
             # interpreter = tf.lite.Interpreter(model_path=args.model_name+'.tflite')
@@ -128,7 +129,10 @@ def main():
                 output_file.write(captchas_files[x] + "," + decode_batch_predictions(captcha_symbols, prediction) + "\n")
                 
                 print('Classified ' + captchas_files[x])
-    
+    end_classify = time.time()
+
+    print(f'Total time taken to classify = {float(end_classify - start_classify)} seconds')
+
     os.remove('unfinished.txt')
     
 if __name__ == '__main__':
