@@ -12,9 +12,10 @@ import warnings
 warnings.filterwarnings("ignore", category=FutureWarning)
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
-from utils import decode_label_char, ConvertToTfLite
+from utils import decode_label_char, ConvertToTfLite, RecordRam, plot_ram
+import time
 
-# from matplotlib import pyplot as plt
+from guppy import hpy
 # import scipy.ndimage
 
 class CTCLayer(keras.layers.Layer):
@@ -244,6 +245,10 @@ def main():
         print("Please specify the captcha symbols file")
         exit(1)
 
+    h = hpy()
+
+    ram_data = []
+
     captcha_symbols = None
     with open(args.symbols) as symbols_file:
         captcha_symbols = symbols_file.readline()
@@ -282,7 +287,8 @@ def main():
         callbacks = [early_stopping,
                      # keras.callbacks.CSVLogger('log.csv'),
                      keras.callbacks.ModelCheckpoint(args.output_model_name+'.h5', save_best_only=False),
-                     ConvertToTfLite(model_dir=args.output_model_name+'.h5', model_name=args.output_model_name)
+                     ConvertToTfLite(model_dir=args.output_model_name+'.h5', model_name=args.output_model_name),
+                     RecordRam(ram_data=ram_data, heap=h)
                      ]
 
         # Save the model architecture to JSON
@@ -290,11 +296,16 @@ def main():
             json_file.write(model.to_json())
 
         try:
+            train_start = time.time()
             model.fit_generator(generator=training_data,
                                 validation_data=validation_data,
                                 epochs=args.epochs,
                                 callbacks=callbacks,
                                 use_multiprocessing=True)
+            train_end = time.time()
+            plot_ram(ram_data=ram_data)
+            print(f'Total time taken for training = {float(train_end - train_start)} seconds')
+
         except KeyboardInterrupt:
             print('KeyboardInterrupt caught, saving current weights as ' +
                   args.output_model_name+'_resume.h5')

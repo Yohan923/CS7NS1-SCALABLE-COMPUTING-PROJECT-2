@@ -29,7 +29,9 @@ SET_UP_ENV_COMMANDS = [
     'pip install numpy==1.19.3',
     'pip install tensorflow==2.4.0rc1',
     'pip install opencv-python',
-    'pip install captcha'
+    'pip install captcha',
+    'pip install matplotlib',
+    'pip install guppy3'
 ]
 GEN_TRAIN_COMMANDS = [
     'python generate.py --width 128 --height 64 --length 1 --symbols symbols.txt --count 6144 --output-dir training-dataset', 

@@ -22,9 +22,12 @@ The script will execute the the following steps
 5. ```pip install tensorflow==2.4.0rc1``` install tensorflow via pip
 6. ```pip install opencv-python``` install opencv via pip
 7. ```pip install captcha``` install captcha package for generating images
-8. generate a set of training images in a directory named ```training-dataset``` if this directory does not exist. The setup currently is 8 sets of 6144 images containing 1-8 characters each. Please ensure this directory is deleted if you want to generate fresh sets of images
-9. generate a set of validation images in a directory named ```validation-dataset``` if this directory does not exist. The setup currently is 8 sets of 612 images containing 1-8 characters each. Please ensure this directory is deleted if you want to generate fresh sets of images
-10. runs [train.py](./train.py) with default hard coded arguments, arguments can be changed by modifying line 57 of the script. By default this will continue training the existing model ```model.h5``` provided with the code bundle. Delete all files with name ```model``` to train new models or remove the input argument ```--input-model```
+8. ```pip install matplotlib``` install matplotlib for plotting ram
+9. ```pip install guppy3``` install guppy for profiling ram
+10. generate a set of training images in a directory named ```training-dataset``` if this directory does not exist. The setup currently is 8 sets of 6144 images containing 1-8 characters each. Please ensure this directory is deleted if you want to generate fresh sets of images
+11. generate a set of validation images in a directory named ```validation-dataset``` if this directory does not exist. The setup currently is 8 sets of 612 images containing 1-8 characters each. Please ensure this directory is deleted if you want to generate fresh sets of images
+12. runs [train.py](./train.py) with default hard coded arguments, arguments can be changed by modifying line 57 of the script. By default this will continue training the existing model ```model.h5``` provided with the code bundle. Delete all files with name ```model``` to train new models or remove the input argument ```--input-model```
+13. plot RAM vs epoch at the end of training
 
 With the current setup, you should see the training running for 100 epoch with batch size of 32. Model is saved after every epoch so we do not lose progress in unexpected circumstances. The model is converted to ```tflite``` model only after the training ends, please ensure to continue training on the model for at least 1 more epoch until training properly ends if the training ends unexpectedly to enure ```tflite``` model is trained.
 After finish training the model, you can transfer the model to the PI using ```scp``` if you wish as you will not be able to upload model to GitHub without password.
