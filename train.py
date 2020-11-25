@@ -11,12 +11,12 @@ import os
 import warnings
 warnings.filterwarnings("ignore", category=FutureWarning)
 warnings.filterwarnings("ignore", category=DeprecationWarning)
-print(tf.__version__)
 
-from utils import decode_label_char, ConvertToTfLite
+from utils import decode_label_char, ConvertToTfLite, RecordRam, plot_ram
+import time
 
-from matplotlib import pyplot as plt
-import scipy.ndimage
+from guppy import hpy
+# import scipy.ndimage
 
 class CTCLayer(keras.layers.Layer):
     def __init__(self, name=None, **kwargs):
@@ -245,21 +245,26 @@ def main():
         print("Please specify the captcha symbols file")
         exit(1)
 
+    h = hpy()
+
+    ram_data = []
+
     captcha_symbols = None
     with open(args.symbols) as symbols_file:
         captcha_symbols = symbols_file.readline()
     captcha_symbols = [ch for ch in captcha_symbols]
     captcha_symbols.append('')
 
+    device = '/device:CPU:0'
     physical_devices = tf.config.experimental.list_physical_devices('GPU')
-    assert len(physical_devices) > 0, "No GPU available!"
-    tf.config.experimental.set_memory_growth(physical_devices[0], True)
+    if len(physical_devices) > 0: # "GPU available!"
+        tf.config.experimental.set_memory_growth(physical_devices[0], True)
+        device = '/device:GPU:0'
 
-    with tf.device('/device:GPU:0'):
-    #with tf.device('/device:CPU:0'):
+    with tf.device(device):
         # with tf.device('/device:XLA_CPU:0'):
-
-        if args.input_model is not None:
+        print(f'training with {device}')
+        if args.input_model is not None and os.path.exists(args.input_model + '.h5'):
             model = tf.keras.models.load_model(args.input_model + '.h5', custom_objects={'CTCLayer': CTCLayer})
             model.load_weights(args.input_model + '.h5')
         else:
@@ -282,7 +287,8 @@ def main():
         callbacks = [early_stopping,
                      # keras.callbacks.CSVLogger('log.csv'),
                      keras.callbacks.ModelCheckpoint(args.output_model_name+'.h5', save_best_only=False),
-                     ConvertToTfLite(model_dir=args.output_model_name+'.h5', model_name=args.output_model_name)
+                     ConvertToTfLite(model_dir=args.output_model_name+'.h5', model_name=args.output_model_name),
+                     RecordRam(ram_data=ram_data, heap=h)
                      ]
 
         # Save the model architecture to JSON
@@ -290,11 +296,16 @@ def main():
             json_file.write(model.to_json())
 
         try:
+            train_start = time.time()
             model.fit_generator(generator=training_data,
                                 validation_data=validation_data,
                                 epochs=args.epochs,
                                 callbacks=callbacks,
                                 use_multiprocessing=True)
+            train_end = time.time()
+            plot_ram(ram_data=ram_data)
+            print(f'Total time taken for training = {float(train_end - train_start)} seconds')
+
         except KeyboardInterrupt:
             print('KeyboardInterrupt caught, saving current weights as ' +
                   args.output_model_name+'_resume.h5')
